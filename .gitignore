@@ -1,0 +1,30 @@
+# Environment variables & secrets
+.env
+
+# Python cache & virtual environment
+__pycache__/
+*.py[cod]
+*$py.class
+venv/
+.venv/
+env/
+
+# Runtime activity data
+data/
+*.sqlite3
+*.sqlite3-shm
+*.sqlite3-wal
+
+# Operating System
+.DS_Store
+Thumbs.db
+
+# IDE configuration
+.vscode/
+.idea/
+
+# Bot output when run in the background
+*.log
+logs/
+_backup*/
+.pytest_cache/

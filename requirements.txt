@@ -1,0 +1,6 @@
+discord.py>=2.7.0
+python-dotenv>=1.0.1
+tzdata>=2024.1
+
+# Slack questionnaire delivery
+aiohttp>=3.9,<4
