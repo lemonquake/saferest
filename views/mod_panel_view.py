@@ -13,7 +13,11 @@ from config import BRAND_NAME, ONBOARDING_LOOKBACK_DAYS
 from core.announcements import ANNOUNCEMENTS, get_announcement_store
 from utils import embed_builder
 from views.announcement_view import open_announcements
-from views.saferest_onboarding_view import SafeRestOnboardingHubView, build_saferest_hub_embed
+from views.saferest_onboarding_view import (
+    SafeRestOnboardingHubView,
+    build_saferest_hub_embed,
+    open_auto_onboarding_toggle,
+)
 from views.common import require_manage
 from views.creator_onboarding_view import (
     CreatorOnboardingHubView,
@@ -39,6 +43,7 @@ logger = logging.getLogger("saferest_bot.mod_panel_ui")
 FIELD_LIMIT = 1024
 
 FUNCTION_GUIDE = [
+    ("🚪 Auto Onboarding", "Turn ON or OFF: while ON, every new member gets the onboarding role and is sent straight into their own private onboarding channel."),
     ("🎟️ SafeRest Onboarding", "Scan new members and open a private #handle-onboarding channel for each — finishing it unlocks the server. 🧪 Test it on yourself (or /test-onboarding); 🔒 Close onboarding deletes a channel."),
     ("👋 Onboarding", "Open a private channel for each new member and tag them there with the TikTok Shop creator question (✅ YES / ❌ NO). 🧪 Test it in any channel."),
     ("ℹ️ Information Onboarding", "Welcome new members with a tagged post and warm DM."),
@@ -102,10 +107,12 @@ async def build_mod_panel_embed(
     if guild is not None and saferest_cog is not None:
         try:
             saferest_stats = await saferest_cog.stats(guild)
+            auto_on = await saferest_cog.auto_enabled(guild.id)
             embed.add_field(
                 name=embed_builder.section("SafeRest onboarding"),
                 value="\n".join(
                     [
+                        embed_builder.item(f"Auto onboarding: **{'ON' if auto_on else 'OFF'}**"),
                         embed_builder.item(f"Waiting to be tagged: **{saferest_stats['pending']}**"),
                         embed_builder.item(
                             f"Open onboarding channels: **{saferest_stats['channels']}** · "
@@ -278,6 +285,19 @@ class ModPanelView(discord.ui.View):
         super().__init__(timeout=None)
 
     # ── Row 0: onboarding ─────────────────────────────────────
+    @discord.ui.button(
+        label="Auto Onboarding",
+        style=discord.ButtonStyle.success,
+        custom_id="saferest_mod_panel:auto_onboarding",
+        emoji="🚪",
+        row=0,
+    )
+    async def auto_onboarding_button(
+        self, interaction: discord.Interaction, button: discord.ui.Button
+    ):
+        """Turns onboarding new members as they join ON or OFF."""
+        await open_auto_onboarding_toggle(interaction)
+
     @discord.ui.button(
         label="SafeRest Onboarding",
         style=discord.ButtonStyle.success,

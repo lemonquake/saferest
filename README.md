@@ -161,7 +161,7 @@ You will see output indicating that the bot has connected:
 
 | Button | What it opens |
 | --- | --- |
-| **🎟️ SafeRest Onboarding** | Scan new members and open a private onboarding channel for each. **🧪 Test on myself** opens one for you. **📣 Post self-onboarding button** lets members open their own. |
+| **🎟️ SafeRest Onboarding** | Scan new members and open a private onboarding channel for each. **🧪 Test on myself** opens one for you. **🚪 Auto onboarding** turns onboarding new members as they join ON or OFF. |
 | **👋 Onboarding** | Creator onboarding: open a private onboarding channel for each new member and tag them there with the TikTok Shop question (✅ YES / ❌ NO). **🧪 Test message** sends it to any channel. |
 | **ℹ️ Information Onboarding** | Scan for new members, pick the join days and the channel to post in, send the welcome. Set a default channel and message. |
 | **📊 Community Reports** | Preview or deploy self-refreshing growth reports. |
@@ -187,7 +187,8 @@ Two optional shortcuts post standalone panels for teams that prefer them: `/onbo
 4. Click **🔍 Scan for new members**. Members who joined in the last 30 days, haven't been tagged yet and don't already have the access role are grouped by join day. Pick the days and press **🎟️ Open N onboarding channels**.
 5. Need to tag a group again? Scan, then press **♻️ Clear last tagged group & rescan**. The most recent group goes back in the list, and tagging them again re-uses their existing channels.
 6. *(Optional)* **📌 Post Shop 101 checkpoint** posts an *I've finished TikTok Shop 101* button in #🛍️tiktok-shop-101, so 🌱 creators can continue from there.
-7. *(Optional, self-serve)* **📣 Post self-onboarding button**, or `/self-onboarding`, posts a public **🎟️ Start my onboarding** button in a channel you pick. Anyone who presses it gets their own private onboarding channel, with no moderator needed. A member who already has a channel is pointed back to it. A member who already has the access role is told they're all set. Double clicks never open two channels. Self-starters are counted in the hub's **Started it themselves**, and scans skip them. Post the button in a channel that new members (@everyone) can see.
+7. **🚪 Auto Onboarding** (Mod Panel or the hub) turns it ON or OFF. While it is ON, every member who joins automatically gets the onboarding role (`1562894736266756236`), loses sight of <#1560232601178996746>, and gets their own private onboarding channel straight away. Finishing the questionnaire grants the access role, removes the onboarding role and shows that channel again. The bot needs **Manage Permissions** in that channel.
+8. *(Optional, self-serve)* `/self-onboarding` posts a public **🎟️ Start my onboarding** button in a channel you pick. Anyone who presses it gets their own private onboarding channel, with no moderator needed. A member who already has a channel is pointed back to it. A member who already has the access role is told they're all set. Double clicks never open two channels. Self-starters are counted in the hub's **Started it themselves**, and scans skip them. Post the button in a channel that new members (@everyone) can see.
 
 What each member gets:
 

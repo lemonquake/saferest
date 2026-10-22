@@ -4,8 +4,8 @@ Created by Aljay Leodones for SafeRest.
 
 Flow:  Scan  ->  pick the join days  ->  Open onboarding channels.
 
-Self-serve:  📣 Post self-onboarding button  ->  pick a channel  ->  members
-press 🎟️ Start my onboarding there and get their own channel.
+Auto onboarding:  🚪 Auto Onboarding  ->  Turn ON  ->  every member who joins
+gets the onboarding role and their own channel straight away.
 
 Each selected member gets a private ``#<handle>-onboarding`` channel where
 they are tagged with the creator questions. The scan screen can also clear
@@ -24,6 +24,8 @@ import logging
 import discord
 
 from cogs.saferest_onboarding import (
+    AUTO_HIDDEN_CHANNEL_ID,
+    AUTO_ONBOARDING_ROLE_ID,
     CATEGORY_LIMIT,
     CategoryFull,
     SafeRestSettings,
@@ -1021,6 +1023,75 @@ async def open_self_onboarding_poster(
     )
 
 
+# ── Auto onboarding switch ─────────────────────────────────────────────────
+def auto_onboarding_embed(enabled: bool, problems: list[str] | None = None) -> discord.Embed:
+    state = "🟢 **ON**" if enabled else "🔴 **OFF**"
+    description = (
+        f"Auto onboarding is {state}.\n\n"
+        "While it is ON, every member who joins automatically gets the "
+        f"<@&{AUTO_ONBOARDING_ROLE_ID}> role, loses sight of <#{AUTO_HIDDEN_CHANNEL_ID}>, "
+        "and gets their own private onboarding channel. When they finish, they "
+        "get the access role, the onboarding role is removed and the hidden "
+        "channel comes back.\n\n"
+        "While it is OFF, nothing happens when members join."
+    )
+    if enabled and problems:
+        description += "\n\n⚠️ **Fix these, or new members won't be onboarded properly:**\n"
+        description += "\n".join(f"• {problem}" for problem in problems)
+    return embed_builder.base_embed(title="Auto Onboarding", description=description)
+
+
+class AutoOnboardingView(discord.ui.View):
+    """A private moderator switch; turning it ON or OFF takes effect at once."""
+
+    def __init__(self, enabled: bool):
+        super().__init__(timeout=300)
+        self.turn_on.disabled = enabled
+        self.turn_off.disabled = not enabled
+
+    async def interaction_check(self, interaction: discord.Interaction) -> bool:
+        return await require_manage(interaction)
+
+    async def _apply(self, interaction: discord.Interaction, enabled: bool) -> None:
+        cog = _cog(interaction)
+        if cog is None:
+            await missing_cog(interaction, "SafeRest Onboarding")
+            return
+        await cog.set_auto_enabled(interaction.guild.id, enabled)
+        logger.info(
+            "Auto onboarding turned %s in %s by %s",
+            "on" if enabled else "off", interaction.guild.id, interaction.user.id,
+        )
+        problems = cog.auto_problems(interaction.guild, await cog.settings(interaction.guild.id))
+        await interaction.response.edit_message(
+            embed=auto_onboarding_embed(enabled, problems), view=AutoOnboardingView(enabled)
+        )
+
+    @discord.ui.button(label="Turn ON", style=discord.ButtonStyle.success, emoji="🟢")
+    async def turn_on(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await self._apply(interaction, True)
+
+    @discord.ui.button(label="Turn OFF", style=discord.ButtonStyle.danger, emoji="🔴")
+    async def turn_off(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await self._apply(interaction, False)
+
+
+async def open_auto_onboarding_toggle(interaction: discord.Interaction) -> None:
+    if not await require_manage(interaction):
+        return
+    cog = _cog(interaction)
+    if cog is None:
+        await missing_cog(interaction, "SafeRest Onboarding")
+        return
+    enabled = await cog.auto_enabled(interaction.guild.id)
+    problems = cog.auto_problems(interaction.guild, await cog.settings(interaction.guild.id))
+    await interaction.response.send_message(
+        embed=auto_onboarding_embed(enabled, problems),
+        view=AutoOnboardingView(enabled),
+        ephemeral=True,
+    )
+
+
 # ── Persistent hub ─────────────────────────────────────────────────────────
 async def build_saferest_hub_embed(interaction: discord.Interaction) -> discord.Embed:
     cog = _cog(interaction)
@@ -1032,6 +1103,7 @@ async def build_saferest_hub_embed(interaction: discord.Interaction) -> discord.
     settings = await cog.settings(guild.id)
     stats = await cog.stats(guild)
     problems = cog.setup_problems(guild, settings)
+    auto_on = await cog.auto_enabled(guild.id)
     creator = interaction.client.get_cog("CreatorOnboardingCog")
     answers = await creator.stats(guild) if creator else None
 
@@ -1043,6 +1115,7 @@ async def build_saferest_hub_embed(interaction: discord.Interaction) -> discord.
         embed_builder.section("Right now"),
         "\n".join(
             [
+                embed_builder.item(f"Auto onboarding: **{'ON' if auto_on else 'OFF'}**"),
                 embed_builder.item(f"Waiting to be tagged: **{stats['pending']}**"),
                 embed_builder.item(f"Open onboarding channels: **{stats['channels']}**"),
                 embed_builder.item(f"Started it themselves: **{stats['self_started']}**"),
@@ -1077,8 +1150,8 @@ async def build_saferest_hub_embed(interaction: discord.Interaction) -> discord.
             "**🔍 Scan** groups recent members by join day — or select a **single member** to onboard individually."
         ),
         embed_builder.item(
-            "**📣 Post self-onboarding button** puts a public *Start my onboarding* "
-            "button in any channel, so members can open their own channel."
+            "**🚪 Auto onboarding** turns it ON or OFF: while ON, every member who "
+            "joins gets their own private onboarding channel straight away."
         ),
         embed_builder.item(
             "**📌 Post Shop 101 checkpoint** adds an *I've finished TikTok Shop 101* "
@@ -1250,17 +1323,17 @@ class SafeRestOnboardingHubView(discord.ui.View):
             ephemeral=True,
         )
 
+    # The custom_id stays "self_start_post" so hubs posted before the switch
+    # replaced the channel picker keep working.
     @discord.ui.button(
-        label="Post self-onboarding button",
+        label="Auto onboarding",
         style=discord.ButtonStyle.success,
         custom_id="saferest_onboarding_hub:self_start_post",
-        emoji="📣",
+        emoji="🚪",
         row=1,
     )
     async def self_start_post(self, interaction: discord.Interaction, button: discord.ui.Button) -> None:
-        if not await require_manage(interaction):
-            return
-        await open_self_onboarding_poster(interaction)
+        await open_auto_onboarding_toggle(interaction)
 
     @discord.ui.button(
         label="Settings",
@@ -1307,6 +1380,7 @@ __all__ = [
     "SafeRestSettingsView",
     "SafeRestSingleMemberSelect",
     "SafeRestTestMemberSelectView",
+    "AutoOnboardingView",
     "SelfOnboardingView",
     "SelfPostView",
     "build_saferest_hub_embed",
@@ -1314,6 +1388,7 @@ __all__ = [
     "build_self_post_embed",
     "build_self_start_embed",
     "build_settings_embed",
+    "open_auto_onboarding_toggle",
     "open_self_onboarding_poster",
     "open_test_channel",
 ]

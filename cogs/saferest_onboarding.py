@@ -83,6 +83,17 @@ STAFF_PERMISSIONS = (
 # The tagged group for members who pressed 🎟️ Start my onboarding themselves.
 SELF_SERVE_BATCH = 0
 
+# Auto onboarding (Mod Panel -> Auto Onboarding): while it is ON, every member
+# who joins gets this role, loses sight of the hidden channel, and is sent
+# straight into their own private onboarding channel. Finishing onboarding
+# removes the role and shows the channel again.
+AUTO_ONBOARDING_ROLE_ID = 1562894736266756236
+AUTO_HIDDEN_CHANNEL_ID = 1560232601178996746
+AUTO_ONBOARDING_SETTING = "saferest_auto_onboarding"
+# The tagged group for members whose channel opened when they joined, so
+# scans skip them but "clear last tagged group" never picks them up.
+AUTO_JOIN_BATCH = -1
+
 ProgressCallback = Callable[[int, int], Awaitable[None]]
 
 
@@ -248,7 +259,116 @@ class SafeRestOnboardingCog(commands.Cog, name="SafeRestOnboardingCog"):
                 f"Move the bot's role **above** {role.mention} in Server Settings → Roles, "
                 "so it can hand that role out."
             )
+        if role is not None and role.id == AUTO_ONBOARDING_ROLE_ID:
+            problems.append("Choose an access role other than the **Onboarding** role.")
+        auto_role = guild.get_role(AUTO_ONBOARDING_ROLE_ID)
+        if auto_role is not None and (auto_role.managed or auto_role >= me.top_role):
+            problems.append(
+                f"The bot must be above {auto_role.mention}, and that role must "
+                "be editable, so it can be removed on completion."
+            )
         return problems
+
+    # -- auto onboarding ---------------------------------------
+    async def auto_enabled(self, guild_id: int) -> bool:
+        return await self.db.get_setting(guild_id, AUTO_ONBOARDING_SETTING) == "1"
+
+    async def set_auto_enabled(self, guild_id: int, enabled: bool) -> None:
+        await self.db.set_setting(guild_id, AUTO_ONBOARDING_SETTING, "1" if enabled else "0")
+
+    def auto_problems(self, guild: discord.Guild, settings: SafeRestSettings) -> list[str]:
+        """Everything that would stop a new member being onboarded on join."""
+        problems = self.setup_problems(guild, settings)
+        if guild.get_role(AUTO_ONBOARDING_ROLE_ID) is None:
+            problems.append(f"The onboarding role `{AUTO_ONBOARDING_ROLE_ID}` was not found.")
+        hidden = guild.get_channel(AUTO_HIDDEN_CHANNEL_ID)
+        if hidden is None:
+            problems.append(f"The channel to hide (`{AUTO_HIDDEN_CHANNEL_ID}`) was not found.")
+        elif not hidden.permissions_for(guild.me).manage_roles:
+            problems.append(
+                f"The bot needs **Manage Permissions** in {hidden.mention} to hide it "
+                "from new members."
+            )
+        return problems
+
+    async def _set_hidden(self, member: discord.Member, hidden: bool) -> None:
+        """Hides the hidden channel from one member, or removes that override."""
+        channel = member.guild.get_channel(AUTO_HIDDEN_CHANNEL_ID)
+        if channel is None:
+            return
+        if hidden:
+            await channel.set_permissions(
+                member, view_channel=False, reason="Auto onboarding: new member"
+            )
+        elif not channel.overwrites_for(member).is_empty():
+            await channel.set_permissions(
+                member, overwrite=None, reason="Auto onboarding: finished or left"
+            )
+
+    async def auto_onboard(self, member: discord.Member) -> discord.TextChannel | None:
+        """Role, hidden channel and private channel for a member who just joined."""
+        from views.creator_onboarding_view import OnboardingTicketView
+
+        guild = member.guild
+        role = guild.get_role(AUTO_ONBOARDING_ROLE_ID)
+        if role is None:
+            logger.warning("Auto onboarding role %s is missing in %s", AUTO_ONBOARDING_ROLE_ID, guild.id)
+        else:
+            try:
+                await member.add_roles(role, reason="Auto onboarding: new member")
+            except discord.HTTPException as exc:
+                logger.warning("Could not give %s the onboarding role: %s", member.id, exc)
+        try:
+            await self._set_hidden(member, True)
+        except discord.HTTPException as exc:
+            logger.warning("Could not hide %s from %s: %s", AUTO_HIDDEN_CHANNEL_ID, member.id, exc)
+
+        category = self.category(guild, await self.settings(guild.id))
+        if category is None:
+            logger.warning("Auto onboarding in %s: the onboarding category is missing", guild.id)
+            return None
+        key = (guild.id, member.id)
+        if key in self._starting:
+            return None
+        self._starting.add(key)
+        try:
+            channel = await self._ticket_channel(guild, member.id)
+            if channel is not None:
+                return channel
+            channel, _ = await self.open_ticket(
+                member, category, OnboardingTicketView(),
+                batch_id=AUTO_JOIN_BATCH, tagged_by=None,
+            )
+        except CategoryFull:
+            logger.warning("Auto onboarding in %s: the category is full", guild.id)
+            return None
+        except discord.HTTPException as exc:
+            logger.warning("Could not open an onboarding channel for %s: %s", member.id, exc)
+            return None
+        finally:
+            self._starting.discard(key)
+        logger.info("Auto onboarding opened %s for %s", channel.id, member.id)
+        return channel
+
+    @commands.Cog.listener()
+    async def on_member_join(self, member: discord.Member) -> None:
+        if member.bot:
+            return
+        try:
+            if await self.auto_enabled(member.guild.id):
+                await self.auto_onboard(member)
+        except Exception:  # noqa: BLE001 - a join must never crash the bot
+            logger.exception("Auto onboarding failed for %s", member.id)
+
+    @commands.Cog.listener()
+    async def on_member_remove(self, member: discord.Member) -> None:
+        """Clears the hidden-channel override left by a member who never finished."""
+        if not any(role.id == AUTO_ONBOARDING_ROLE_ID for role in member.roles):
+            return
+        try:
+            await self._set_hidden(member, False)
+        except Exception:  # noqa: BLE001 - bookkeeping only
+            logger.warning("Could not clear the hidden channel for %s", member.id, exc_info=True)
 
     # -- records -----------------------------------------------
     async def tagged_ids(self, guild_id: int) -> set[int]:
@@ -276,10 +396,10 @@ class SafeRestOnboardingCog(commands.Cog, name="SafeRestOnboardingCog"):
             """
             SELECT batch_id, COUNT(*) AS total, MAX(tagged_at) AS tagged_at
             FROM saferest_onboarding_members
-            WHERE guild_id = ? AND batch_id IS NOT NULL AND batch_id != ?
+            WHERE guild_id = ? AND batch_id IS NOT NULL AND batch_id NOT IN (?, ?)
             GROUP BY batch_id ORDER BY MAX(tagged_at) DESC LIMIT 1
             """,
-            (guild_id, SELF_SERVE_BATCH),
+            (guild_id, SELF_SERVE_BATCH, AUTO_JOIN_BATCH),
         )
         if row is None:
             return None
@@ -494,7 +614,10 @@ class SafeRestOnboardingCog(commands.Cog, name="SafeRestOnboardingCog"):
 
     # -- completion --------------------------------------------
     async def complete(self, member: discord.Member) -> bool:
-        """Grants the access role and logs completion. False if it could not."""
+        """
+        Grants the access role, takes the Onboarding role away and shows the
+        hidden channel again, then logs completion. False if it could not.
+        """
         guild = member.guild
         settings = await self.settings(guild.id)
         await self.db.execute(
@@ -506,16 +629,21 @@ class SafeRestOnboardingCog(commands.Cog, name="SafeRestOnboardingCog"):
             (member.id, guild.id, time.time()),
         )
         role = self.role(guild, settings)
-        if role is None:
+        if role is None or role.id == AUTO_ONBOARDING_ROLE_ID:
             logger.warning("SafeRest onboarding access role %s not found", settings.role_id)
             return False
-        if role in member.roles:
-            return True
         try:
-            await member.add_roles(role, reason="Completed SafeRest onboarding")
+            if role not in member.roles:
+                await member.add_roles(role, reason="Completed SafeRest onboarding")
+            for temporary in [r for r in member.roles if r.id == AUTO_ONBOARDING_ROLE_ID]:
+                await member.remove_roles(temporary, reason="Completed SafeRest onboarding")
         except discord.HTTPException as exc:
-            logger.warning("Could not grant %s to %s: %s", role.id, member.id, exc)
+            logger.warning("Could not update onboarding roles for %s: %s", member.id, exc)
             return False
+        try:
+            await self._set_hidden(member, False)
+        except discord.HTTPException as exc:
+            logger.warning("Could not show %s to %s again: %s", AUTO_HIDDEN_CHANNEL_ID, member.id, exc)
         return True
 
     async def stats(self, guild: discord.Guild) -> dict[str, int]:
