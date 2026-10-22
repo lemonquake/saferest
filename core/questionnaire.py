@@ -19,24 +19,15 @@ def valid_webhook(url: str) -> bool:
 
 
 def validate_answers(values: dict[str, str]) -> dict[str, str]:
-    answers = {key: value.strip() for key, value in values.items()}
-    limits = {"tt_handle": 100, "email": 254, "gmv": 100, "birthday": 5, "phone": 30}
+    limits = {"tt_handle": 100, "email": 254, "phone": 30}
+    answers = {key: values.get(key, "").strip() for key in limits}
     for key, limit in limits.items():
         if len(answers.get(key, "")) > limit:
             raise ValueError("An answer is too long. Please shorten it.")
-        if key != "birthday" and not answers.get(key):
-            raise ValueError("Please answer all four required questions.")
+        if not answers[key]:
+            raise ValueError("Please answer all three required questions.")
     if not re.fullmatch(r"[^\s@]+@[^\s@]+\.[^\s@]+", answers["email"]):
         raise ValueError("Please enter a valid email address, such as name@example.com.")
-    birthday = answers.get("birthday", "")
-    if birthday:
-        try:
-            if not re.fullmatch(r"\d{1,2}/\d{1,2}", birthday):
-                raise ValueError
-            parsed = datetime.strptime(f"2000/{birthday}", "%Y/%m/%d")
-            answers["birthday"] = parsed.strftime("%m/%d")
-        except ValueError:
-            raise ValueError("Enter your birthday as MM/DD (for example, 07/24), or leave it blank.") from None
     # Digits and the usual separators; 7-15 digits covers local and international numbers.
     phone = answers["phone"]
     if not re.fullmatch(r"[0-9 ()+.-]+", phone) or not 7 <= len(re.findall(r"[0-9]", phone)) <= 15:
@@ -50,8 +41,6 @@ def slack_payload(brand: str, record: dict) -> dict:
         ("TikTok handle", answers["tt_handle"]),
         ("Email", answers["email"]),
         ("Phone number", answers["phone"]),
-        ("TikTok GMV — last 30 days", answers["gmv"]),
-        ("Birthday (MM/DD)", answers.get("birthday") or "Not provided"),
         ("Discord account", record["discord_account"]),
         ("Discord user ID", str(record["user_id"])),
         ("Discord server ID", str(record["guild_id"])),
@@ -71,6 +60,7 @@ def slack_payload(brand: str, record: dict) -> dict:
     }
 
 
+# Keep the historical export columns so previously saved answers remain available.
 SHEET_COLUMNS = [
     "Submitted (UTC)", "TikTok handle", "Email", "Phone number",
     "TikTok GMV — last 30 days", "Birthday (MM/DD)", "Discord account",

@@ -26,6 +26,8 @@ from config import (
     CREATOR_GETTING_STARTED_CHANNEL_ID,
     CREATOR_OPPORTUNITIES_CHANNEL_ID,
     CREATOR_WELCOME_CHANNEL_ID,
+    PRODUCT_INFO_CHANNEL_URL,
+    SUPPORT_TICKET_CHANNEL_URL,
 )
 from cogs.onboarding import (
     MAX_MESSAGE_LENGTH,
@@ -76,13 +78,14 @@ NEXT_STEP_MESSAGE = (
     "## Ready to start earning with SafeRest? 💰 Here's a quick rundown of how this "
     "community works, what we expect from each other, and all the ways you can "
     "make money with us.\n\n"
+    f"Read [product info]({PRODUCT_INFO_CHANNEL_URL}) to learn about SafeRest products.\n\n"
     "**Community Rules**\n"
     "1. Respect others. No hate speech, discrimination, or bullying.\n"
     "2. Keep chats organized. Use the right channels and avoid spamming.\n"
     "3. Be an active participant. This community grows when everyone "
     "contributes. Share what's working, engage with other creators, and help "
     "each other level up.\n"
-    "4. For support, open a ticket in the support channel. "
+    f"4. For support, open a ticket in the [support ticket channel]({SUPPORT_TICKET_CHANNEL_URL}). "
     "We do not respond to DMs for support requests.\n\n"
     "By joining, you agree to follow these rules.\n\n"
     "## Complete Your Onboarding 👇"

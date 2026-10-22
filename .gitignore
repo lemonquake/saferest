@@ -28,3 +28,6 @@ Thumbs.db
 logs/
 _backup*/
 .pytest_cache/
+
+# Artifacts and outputs
+outputs/

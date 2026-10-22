@@ -259,7 +259,14 @@ class MemberButtonTests(unittest.TestCase):
 
     def test_rules_copy(self):
         self.assertIn("## Ready to start earning with SafeRest? 💰", NEXT_STEP_MESSAGE)
-        self.assertIn("open a ticket in the support channel", NEXT_STEP_MESSAGE)
+        self.assertIn(
+            "[support ticket channel](https://discord.com/channels/1546233896918720645/1558164502091137024)",
+            NEXT_STEP_MESSAGE,
+        )
+        self.assertIn(
+            "[product info](https://discord.com/channels/1546233896918720645/1557841878064300072)",
+            NEXT_STEP_MESSAGE,
+        )
         self.assertTrue(NEXT_STEP_MESSAGE.endswith("## Complete Your Onboarding 👇"))
         self.assertLess(len(NEXT_STEP_MESSAGE), 2000)
 
@@ -316,7 +323,8 @@ class FakeGuildMember(discord.Object):
 
 FULL_ACCESS = (
     "You now have full access to the SafeRest creator community! Head to "
-    "**#opportunities-to-earn** to see all the ways you can earn with us. 🎉"
+    "[#opportunities-to-earn](https://discord.com/channels/1/1560318417922428948) "
+    "to see all the ways you can earn with us. 🎉"
 )
 
 

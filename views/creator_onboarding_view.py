@@ -51,7 +51,7 @@ from cogs.creator_onboarding import (
     learning_message,
 )
 from cogs.onboarding import DayGroup, missing_permissions
-from config import ONBOARDING_LOOKBACK_DAYS
+from config import ONBOARDING_LOOKBACK_DAYS, SUPPORT_TICKET_CHANNEL_URL
 from utils import embed_builder
 from views.common import ack, missing_cog, replace_message, require_manage
 from views.questionnaire_view import QuestionnaireModal, questionnaire_embed
@@ -228,7 +228,8 @@ async def ask_to_close(interaction: discord.Interaction) -> None:
     if interaction.user.id == owner:
         detail = (
             "This channel and its messages are deleted. If you haven't finished "
-            "onboarding yet, ask the team in a support ticket to open a new one."
+            f"onboarding yet, ask the team in the [support ticket channel]({SUPPORT_TICKET_CHANNEL_URL}) "
+            "to open a new one."
         )
     else:
         detail = (

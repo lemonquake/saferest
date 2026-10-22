@@ -494,7 +494,7 @@ Created by **Aljay Leodones** for **SafeRest**.
 
 ## Member questionnaire and Slack responses
 
-There is no fixed questionnaire channel. Press **📋 Post Questionnaire** in the Mod Panel (or use `/post-questionnaire`), choose the channel and press **📝 Post questionnaire**. The five questions collect TikTok handle, email, phone number, last 30 days TikTok GMV, and an optional birthday. The member's Discord account is captured automatically. Responses are saved locally and sent to the brand's private Slack channel.
+There is no fixed questionnaire channel. Press **📋 Post Questionnaire** in the Mod Panel (or use `/post-questionnaire`), choose the channel and press **📝 Post questionnaire**. The three required questions collect TikTok handle, email, and phone number. The member's Discord account is captured automatically. Responses are saved locally and sent to the brand's private Slack channel.
 
 You can also open it from **ℹ️ Information Onboarding → Post questionnaire**. Press it again for another copy or pick another channel — every copy works the same and survives restarts.
 

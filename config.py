@@ -113,7 +113,17 @@ CREATOR_GETTING_STARTED_CHANNEL_ID = _optional_int(
     "CREATOR_GETTING_STARTED_CHANNEL_ID"
 )
 CREATOR_OPPORTUNITIES_CHANNEL_ID = _optional_int(
-    "CREATOR_OPPORTUNITIES_CHANNEL_ID"
+    "CREATOR_OPPORTUNITIES_CHANNEL_ID", "1560318417922428948"
+)
+
+# Member-facing links used in onboarding instructions.
+SUPPORT_TICKET_CHANNEL_URL = os.getenv(
+    "SUPPORT_TICKET_CHANNEL_URL",
+    "https://discord.com/channels/1546233896918720645/1558164502091137024",
+)
+PRODUCT_INFO_CHANNEL_URL = os.getenv(
+    "PRODUCT_INFO_CHANNEL_URL",
+    "https://discord.com/channels/1546233896918720645/1557841878064300072",
 )
 
 # SafeRest Onboarding: each new member gets a private "<handle>-onboarding"

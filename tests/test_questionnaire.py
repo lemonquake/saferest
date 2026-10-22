@@ -14,11 +14,11 @@ from core.database import CommunityDatabase
 from core.questionnaire import slack_payload, valid_webhook, validate_answers
 from cogs.questionnaire import QuestionnaireCog, SCHEMA
 from views.onboarding_view import QuestionnairePostView, open_questionnaire_poster
-from views.questionnaire_view import MemberQuestionnaireView, QuestionnaireModal
+from views.questionnaire_view import MemberQuestionnaireView, QuestionnaireModal, questionnaire_embed
 
 
 ANSWERS = dict(tt_handle="@creator", email="creator@example.com",
-               gmv="USD 5,000", birthday="02/29", phone="+1 (555) 123-4567")
+               phone="+1 (555) 123-4567")
 
 
 class Response:
@@ -47,12 +47,18 @@ class Session:
 
 
 class ValidationTests(unittest.TestCase):
-    def test_email_and_birthday(self):
-        self.assertEqual(validate_answers(ANSWERS)["birthday"], "02/29")
-        self.assertEqual(validate_answers({**ANSWERS, "birthday": ""})["birthday"], "")
-        for bad in [{"email": "not-an-email"}, {"birthday": "02/30"}, {"birthday": "2020-01-01"}, {"gmv": " "}]:
-            with self.subTest(bad=bad), self.assertRaises(ValueError):
-                validate_answers({**ANSWERS, **bad})
+    def test_three_answers_are_sufficient(self):
+        self.assertEqual(validate_answers(ANSWERS), ANSWERS)
+        for key in ANSWERS:
+            with self.subTest(missing=key), self.assertRaisesRegex(ValueError, "three required"):
+                validate_answers({name: value for name, value in ANSWERS.items() if name != key})
+
+    def test_email_is_checked(self):
+        with self.assertRaises(ValueError):
+            validate_answers({**ANSWERS, "email": "not-an-email"})
+
+    def test_removed_answers_are_ignored(self):
+        self.assertEqual(validate_answers({**ANSWERS, "gmv": " ", "birthday": "02/30"}), ANSWERS)
 
     def test_phone_is_required_and_checked(self):
         self.assertEqual(validate_answers(ANSWERS)["phone"], "+1 (555) 123-4567")
@@ -67,6 +73,8 @@ class ValidationTests(unittest.TestCase):
         labels = [b["text"]["text"].split("\n")[0] for b in slack_payload("Test Brand", record)["blocks"][1:]]
         self.assertEqual(labels[:3], ["TikTok handle", "Email", "Phone number"])
         self.assertNotIn("Discord handle (provided)", labels)
+        self.assertNotIn("TikTok GMV — last 30 days", labels)
+        self.assertNotIn("Birthday (MM/DD)", labels)
 
     def test_slack_urls_only(self):
         self.assertTrue(valid_webhook("https://hooks.slack.com/services/TTEST/BTEST/SECRET"))
@@ -158,13 +166,15 @@ class QuestionnaireTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(len(self.cog.session.calls), 1)
         self.assertEqual((await self.row())["status"], "blocked")
 
-    async def test_form_has_four_required_fields_with_phone_after_email(self):
+    async def test_form_has_three_required_fields_with_phone_after_email(self):
         modal = QuestionnaireModal(SimpleNamespace(id=2))
-        self.assertEqual(len(modal.children), 5)
-        self.assertEqual(sum(field.required for field in modal.children), 4)
-        self.assertEqual(list(modal.inputs), ["tt_handle", "email", "phone", "gmv", "birthday"])
-        self.assertFalse(modal.inputs["birthday"].required)
+        self.assertEqual(len(modal.children), 3)
+        self.assertEqual(sum(field.required for field in modal.children), 3)
+        self.assertEqual(list(modal.inputs), ["tt_handle", "email", "phone"])
         self.assertTrue(modal.inputs["phone"].required)
+        description = questionnaire_embed().description
+        self.assertNotIn("GMV", description)
+        self.assertNotIn("birthday", description.lower())
         self.assertTrue(self.cog.view.is_persistent())
 
     async def test_form_opens_in_any_server_channel(self):

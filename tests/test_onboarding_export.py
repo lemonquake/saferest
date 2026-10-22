@@ -16,7 +16,13 @@ RECORD = {
 
 class SheetRowTests(unittest.TestCase):
     def test_row_matches_columns_and_forces_text(self):
-        row = sheet_row(slack_payload("SafeRest", RECORD), "sent")
+        # A payload saved before the form was shortened still exports its old answers.
+        payload = slack_payload("SafeRest", RECORD)
+        payload["blocks"].extend([
+            {"type": "section", "text": {"type": "plain_text", "text": "TikTok GMV — last 30 days\n" + RECORD["answers"]["gmv"]}},
+            {"type": "section", "text": {"type": "plain_text", "text": "Birthday (MM/DD)\n02/29"}},
+        ])
+        row = sheet_row(payload, "sent")
         self.assertEqual(len(row), len(SHEET_COLUMNS))
         self.assertEqual(row[0], "2026-09-20 12:34:56")
         self.assertEqual(row[1], "'@creator name")  # tab would split the column
@@ -27,9 +33,17 @@ class SheetRowTests(unittest.TestCase):
         self.assertEqual(row[-1], "Sent")
         self.assertFalse(any("\t" in cell or "\n" in cell for cell in row))
 
-    def test_missing_birthday_is_blank(self):
-        record = {**RECORD, "answers": {**RECORD["answers"], "birthday": ""}}
-        self.assertEqual(sheet_row(slack_payload("SafeRest", record), "pending")[5], "")
+    def test_new_responses_leave_historical_columns_blank(self):
+        record = {**RECORD, "answers": {key: RECORD["answers"][key] for key in ("tt_handle", "email", "phone")}}
+        row = sheet_row(slack_payload("SafeRest", record), "pending")
+        self.assertEqual(len(row), len(SHEET_COLUMNS))
+        self.assertEqual(row[4:6], ["", ""])
+        self.assertEqual(row[-1], "Waiting")
+
+    def test_historical_missing_birthday_is_blank(self):
+        payload = slack_payload("SafeRest", RECORD)
+        payload["blocks"].append({"type": "section", "text": {"type": "plain_text", "text": "Birthday (MM/DD)\nNot provided"}})
+        self.assertEqual(sheet_row(payload, "pending")[5], "")
 
 
 if __name__ == "__main__":
